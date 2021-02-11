@@ -17,6 +17,21 @@ import pytz
 class DatabaseOperations(BaseDatabaseOperations):
     compiler_module = 'sql_server.pyodbc.compiler'
 
+    integer_field_ranges = {
+        'TinyIntegerField': (-128, 127),
+        'SmallIntegerField': (-32768, 32767),
+        'IntegerField': (-2147483648, 2147483647),
+        'BigIntegerField': (-9223372036854775808, 9223372036854775807),
+        'PositiveBigIntegerField': (0, 9223372036854775807),
+        'PositiveSmallIntegerField': (0, 32767),
+        'PositiveTinyIntegerField': (0, 127),
+        'PositiveIntegerField': (0, 2147483647),
+        'TinyAutoField': (-128, 127),
+        'SmallAutoField': (-32768, 32767),
+        'AutoField': (-2147483648, 2147483647),
+        'BigAutoField': (-9223372036854775808, 9223372036854775807),
+    }
+
     cast_char_field_without_max_length = 'nvarchar(max)'
 
     def _convert_field_to_tz(self, field_name, tzname):
