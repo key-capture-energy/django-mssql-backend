@@ -88,6 +88,7 @@ class DatabaseWrapper(BaseDatabaseWrapper):
         'NullBooleanField': 'bit',
         'OneToOneField': 'int',
         'PositiveIntegerField': 'int',
+        'PositiveTinyIntegerField': 'tinyint',
         'PositiveSmallIntegerField': 'smallint',
         'PositiveBigIntegerField': 'bigint',
         'SlugField': 'nvarchar(%(max_length)s)',
@@ -95,12 +96,15 @@ class DatabaseWrapper(BaseDatabaseWrapper):
         'SmallIntegerField': 'smallint',
         'TextField': 'nvarchar(max)',
         'TimeField': 'time',
+        'TinyAutoField': 'tinyint IDENTITY (1, 1)',
+        'TinyIntegerField': 'tinyint',
         'UUIDField': 'char(32)',
         'JSONField': 'nvarchar(max)',
     }
     data_type_check_constraints = {
         'PositiveIntegerField': '[%(column)s] >= 0',
         'PositiveSmallIntegerField': '[%(column)s] >= 0',
+        'PositiveTinyIntegerField': '[%(column)s] >= 0',
     }
     operators = {
         # Since '=' is used not only for string comparision there is no way
