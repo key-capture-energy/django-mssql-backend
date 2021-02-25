@@ -617,6 +617,9 @@ class CursorWrapper(object):
     def __iter__(self):
         return iter(self.cursor)
 
+import struct
+from datetime import datetime, timedelta, timezone
+
 def handle_datetimeoffset(dto_value):
     # ref: https://github.com/mkleehammer/pyodbc/issues/134#issuecomment-281739794
     tup = struct.unpack("<6hI2h", dto_value)  # e.g., (2017, 3, 16, 10, 35, 18, 0, -6, 0)
