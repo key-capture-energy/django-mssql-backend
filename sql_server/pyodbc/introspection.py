@@ -8,6 +8,7 @@ from django.db.models.indexes import Index
 
 SQL_AUTOFIELD = -777555
 SQL_BIGAUTOFIELD = -777444
+SQL_SS_TIMESTAMPOFFSET = -155
 
 FieldInfo = namedtuple('FieldInfo', 'name type_code display_size internal_size precision scale null_ok default')
 
@@ -32,10 +33,11 @@ class DatabaseIntrospection(BaseDatabaseIntrospection):
         Database.SQL_REAL: 'FloatField',
         Database.SQL_SMALLINT: 'SmallIntegerField',
         Database.SQL_SS_TIME2: 'TimeField',
-        Database.SQL_TINYINT: 'SmallIntegerField',
+        Database.SQL_TINYINT: 'TinyIntegerField',
         Database.SQL_TYPE_DATE: 'DateField',
         Database.SQL_TYPE_TIME: 'TimeField',
         Database.SQL_TYPE_TIMESTAMP: 'DateTimeField',
+        SQL_SS_TIMESTAMPOFFSET: 'DateTimeOffsetField',
         Database.SQL_VARBINARY: 'BinaryField',
         Database.SQL_VARCHAR: 'TextField',
         Database.SQL_WCHAR: 'CharField',
