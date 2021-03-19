@@ -83,7 +83,11 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
     sql_create_unique_null = "CREATE UNIQUE INDEX %(name)s ON %(table)s(%(columns)s) " \
                              "WHERE %(columns)s IS NOT NULL"
 
-    _sql_create_temporal_table_field = "PERIOD FOR SYSTEM_TIME (SysStartTime,SysEndTime)"
+    _sql_create_temporal_table_fields = [
+        "SysStartTime DATETIME2 GENERATED ALWAYS AS ROW START NOT NULL",
+        "SysEndTime DATETIME2 GENERATED ALWAYS AS ROW END NOT NULL",
+        "PERIOD FOR SYSTEM_TIME (SysStartTime,SysEndTime)"
+    ]
     _sql_create_temporal_table_suffix = "WITH (SYSTEM_VERSIONING = ON %(hist_clause)s)"
     _sql_create_temporal_table_hist_clause = "(HISTORY_TABLE = %(hist_table)s)"
 
@@ -872,7 +876,7 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
         tt_def = tokenize_tt(model._meta.db_table)
 
         if tt_def:
-            column_sqls.append(self._sql_create_temporal_table_field)
+            column_sqls.extend(self._sql_create_temporal_table_fields)
 
         # Make the table
         sql = self.sql_create_table % {
