@@ -71,6 +71,10 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
     sql_create_unique_null = "CREATE UNIQUE INDEX %(name)s ON %(table)s(%(columns)s) " \
                              "WHERE %(columns)s IS NOT NULL"
 
+    _sql_create_temporal_table_field = "PERIOD FOR SYSTEM_TIME (SysStartTime,SysEndTime)"
+    _sql_create_temporal_table_suffix = "WITH (SYSTEM_VERSIONING = ON %(hist_clause)s)"
+    _sql_create_temporal_table_hist_clause = "(HISTORY_TABLE = %(hist_table)s)"
+
     def _alter_column_default_sql(self, model, old_field, new_field, drop=False):
         """
         Hook to specialize column default alteration.
@@ -853,6 +857,9 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
             condition = ' AND '.join(["[%s] IS NOT NULL" % col for col in columns])
             self.deferred_sql.append(self._create_unique_sql(model, columns, condition=condition))
 
+        if hasattr(model, 'temporal') and model.temporal:
+            column_sqls.append(self._sql_create_temporal_table_field)
+
         # Make the table
         sql = self.sql_create_table % {
             "table": self.quote_name(model._meta.db_table),
@@ -862,6 +869,14 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
             tablespace_sql = self.connection.ops.tablespace_sql(model._meta.db_tablespace)
             if tablespace_sql:
                 sql += ' ' + tablespace_sql
+
+        if hasattr(model, 'temporal') and model.temporal:
+            sql += ' ' + self._sql_create_temporal_table_suffix % {
+                'hist_clause': (self._sql_create_temporal_table_hist_clause % {
+                    'hist_table': self.quote_name(model.hist_table)
+                } if not model.anonymous else '')
+            }
+
         # Prevent using [] as params, in the case a literal '%' is used in the definition
         self.execute(sql, params or None)
 
