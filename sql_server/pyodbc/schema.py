@@ -21,6 +21,18 @@ from django.db.models.fields import AutoField, BigAutoField
 from django.db.transaction import TransactionManagementError
 from django.utils.encoding import force_str
 
+def tokenize_tt(db_table):
+    if len(db_table.split('/')) > 1:
+        tt_def = db_table.split('/')[1]
+
+        if tt_def.lower().startswith('tt{'):
+            return {
+                'anonymous': bool(tt_def.split(',')[0][3:]),
+                'hist_table': tt_def.split(',')[1][:-1]
+            }
+
+    return None
+
 
 class Statement(DjStatement):
     def __hash__(self):
@@ -92,7 +104,7 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
             # SQL Server requires the name of the default constraint
             result = self.execute(
                 self._sql_select_default_constraint_name % {
-                    "table": self.quote_value(model._meta.db_table),
+                    "table": self.quote_value(model._meta.db_table.split('/')[0]),
                     "column": self.quote_value(new_field.column),
                 },
                 has_result=True
@@ -191,7 +203,7 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
         """Alter M2Ms to repoint their to= endpoints."""
 
         for idx in self._constraint_names(old_field.remote_field.through, index=True, unique=True):
-            self.execute(self.sql_delete_index % {'name': idx, 'table': old_field.remote_field.through._meta.db_table})
+            self.execute(self.sql_delete_index % {'name': idx, 'table': old_field.remote_field.through._meta.db_table.split('/')[0]})
 
         return super()._alter_many_to_many(model, old_field, new_field, strict)
 
@@ -205,7 +217,7 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
                 for name in column_names
             ]
         with self.connection.cursor() as cursor:
-            constraints = self.connection.introspection.get_constraints(cursor, db_table)
+            constraints = self.connection.introspection.get_constraints(cursor, db_table.split('/')[0])
         result = []
         for name, infodict in constraints.items():
             if column_names is None or column_names == infodict['columns']:
@@ -228,7 +240,7 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
     def _db_table_delete_constraint_sql(self, template, db_table, name):
         return Statement(
             template,
-            table=Table(db_table, self.quote_name),
+            table=Table(db_table.split('/')[0], self.quote_name),
             name=self.quote_name(name),
         )
 
@@ -265,7 +277,7 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
             if strict and len(fk_names) != 1:
                 raise ValueError("Found wrong number (%s) of foreign key constraints for %s.%s" % (
                     len(fk_names),
-                    model._meta.db_table,
+                    model._meta.db_table.split('/')[0],
                     old_field.column,
                 ))
             for fk_name in fk_names:
@@ -278,7 +290,7 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
             if strict and len(constraint_names) != 1:
                 raise ValueError("Found wrong number (%s) of unique constraints for %s.%s" % (
                     len(constraint_names),
-                    model._meta.db_table,
+                    model._meta.db_table.split('/')[0],
                     old_field.column,
                 ))
             for constraint_name in constraint_names:
@@ -337,7 +349,7 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
             if strict and len(constraint_names) != 1:
                 raise ValueError("Found wrong number (%s) of check constraints for %s.%s" % (
                     len(constraint_names),
-                    model._meta.db_table,
+                    model._meta.db_table.split('/')[0],
                     old_field.column,
                 ))
             for constraint_name in constraint_names:
@@ -347,11 +359,11 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
             # remove old indices
             self._delete_indexes(model, old_field, new_field)
 
-            self.execute(self._rename_field_sql(model._meta.db_table, old_field, new_field, new_type))
+            self.execute(self._rename_field_sql(model._meta.db_table.split('/')[0], old_field, new_field, new_type))
             # Rename all references to the renamed column.
             for sql in self.deferred_sql:
                 if isinstance(sql, DjStatement):
-                    sql.rename_column_references(model._meta.db_table, old_field.column, new_field.column)
+                    sql.rename_column_references(model._meta.db_table.split('/')[0], old_field.column, new_field.column)
 
         # Next, start accumulating actions to do
         actions = []
@@ -413,7 +425,7 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
                 self._delete_indexes(model, old_field, new_field)
                 self.execute(
                     self.sql_alter_column % {
-                        "table": self.quote_name(model._meta.db_table),
+                        "table": self.quote_name(model._meta.db_table.split('/')[0]),
                         "changes": sql,
                     },
                     params,
@@ -422,7 +434,7 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
                 # Update existing rows with default value
                 self.execute(
                     self.sql_update_with_default % {
-                        "table": self.quote_name(model._meta.db_table),
+                        "table": self.quote_name(model._meta.db_table.split('/')[0]),
                         "column": self.quote_name(new_field.column),
                         "default": "%s",
                     },
@@ -433,7 +445,7 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
                 for sql, params in null_actions:
                     self.execute(
                         self.sql_alter_column % {
-                            "table": self.quote_name(model._meta.db_table),
+                            "table": self.quote_name(model._meta.db_table.split('/')[0]),
                             "changes": sql,
                         },
                         params,
@@ -512,9 +524,9 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
             # Make the new one
             self.execute(
                 self.sql_create_pk % {
-                    "table": self.quote_name(model._meta.db_table),
+                    "table": self.quote_name(model._meta.db_table.split('/')[0]),
                     "name": self.quote_name(
-                        self._create_index_name(model._meta.db_table, [new_field.column], suffix="_pk")
+                        self._create_index_name(model._meta.db_table.split('/')[0], [new_field.column], suffix="_pk")
                     ),
                     "columns": self.quote_name(new_field.column),
                 }
@@ -530,7 +542,7 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
             )
             self.execute(
                 self.sql_alter_column % {
-                    "table": self.quote_name(new_rel.related_model._meta.db_table),
+                    "table": self.quote_name(new_rel.related_model._meta.db_table.split('/')[0]),
                     "changes": fragment[0],
                 },
                 fragment[1],
@@ -555,9 +567,9 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
         ):
             self.execute(
                 self.sql_create_check % {
-                    "table": self.quote_name(model._meta.db_table),
+                    "table": self.quote_name(model._meta.db_table.split('/')[0]),
                     "name": self.quote_name(
-                        self._create_index_name(model._meta.db_table, [new_field.column], suffix="_check")
+                        self._create_index_name(model._meta.db_table.split('/')[0], [new_field.column], suffix="_check")
                     ),
                     "column": self.quote_name(new_field.column),
                     "check": new_db_params['check'],
@@ -568,7 +580,7 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
         if needs_database_default:
             changes_sql, params = self._alter_column_default_sql(model, old_field, new_field, drop=True)
             sql = self.sql_alter_column % {
-                "table": self.quote_name(model._meta.db_table),
+                "table": self.quote_name(model._meta.db_table.split('/')[0]),
                 "changes": changes_sql,
             }
             self.execute(sql, params)
@@ -608,7 +620,7 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
                 if strict and len(constraint_names) != 1:
                     raise ValueError("Found wrong number (%s) of unique constraints for %s.%s" % (
                         len(constraint_names),
-                        model._meta.db_table,
+                        model._meta.db_table.split('/')[0],
                         old_field.column,
                     ))
                 for constraint_name in constraint_names_normal:
@@ -661,7 +673,7 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
             definition += " CHECK (%s)" % db_params['check']
         # Build the SQL and run it
         sql = self.sql_create_column % {
-            "table": self.quote_name(model._meta.db_table),
+            "table": self.quote_name(model._meta.db_table.split('/')[0]),
             "column": self.quote_name(field.column),
             "definition": definition,
         }
@@ -671,7 +683,7 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
         if not self.skip_default(field) and self.effective_default(field) is not None:
             changes_sql, params = self._alter_column_default_sql(model, None, field, drop=True)
             sql = self.sql_alter_column % {
-                "table": self.quote_name(model._meta.db_table),
+                "table": self.quote_name(model._meta.db_table.split('/')[0]),
                 "changes": changes_sql,
             }
             self.execute(sql, params)
@@ -691,9 +703,9 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
         def create_unique_name(*args, **kwargs):
             return self.quote_name(self._create_index_name(*args, **kwargs))
 
-        table = Table(model._meta.db_table, self.quote_name)
+        table = Table(model._meta.db_table.split('/')[0], self.quote_name)
         if name is None:
-            name = IndexName(model._meta.db_table, columns, '_uniq', create_unique_name)
+            name = IndexName(model._meta.db_table.split('/')[0], columns, '_uniq', create_unique_name)
         else:
             name = self.quote_name(name)
         columns = Columns(table, columns, self.quote_name)
@@ -730,7 +742,7 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
         tablespace_sql = self._get_index_tablespace_sql(model, fields, db_tablespace=db_tablespace)
         columns = [field.column for field in fields]
         sql_create_index = sql or self.sql_create_index
-        table = model._meta.db_table
+        table = model._meta.db_table.split('/')[0]
 
         def create_index_name(*args, **kwargs):
             nonlocal name
@@ -783,9 +795,9 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
             return self.quote_name(self._create_index_name(*args, **kwargs))
 
         return ForeignKeyName(
-            model._meta.db_table.split('[')[-1],
+            model._meta.db_table.split('/')[0].split('[')[-1],
             [field.column],
-            split_identifier(field.target_field.model._meta.db_table.split('[')[-1])[1],
+            split_identifier(field.target_field.model._meta.db_table.split('/')[0].split('[')[-1])[1],
             [field.target_field.column],
             suffix,
             create_fk_name,
@@ -820,7 +832,7 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
             if db_params['check']:
                 # SQL Server requires a name for the check constraint
                 definition += self._sql_check_constraint % {
-                    "name": self._create_index_name(model._meta.db_table, [field.column], suffix="_check"),
+                    "name": self._create_index_name(model._meta.db_table.split('/')[0], [field.column], suffix="_check"),
                     "check": db_params['check']
                 }
             # Autoincrement SQL (for backends with inline variant)
@@ -830,7 +842,7 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
             params.extend(extra_params)
             # FK
             if field.remote_field and field.db_constraint:
-                to_table = field.remote_field.model._meta.db_table
+                to_table = field.remote_field.model._meta.db_table.split('/')[0]
                 to_column = field.remote_field.model._meta.get_field(field.remote_field.field_name).column
                 if self.sql_create_inline_fk:
                     definition += " " + self.sql_create_inline_fk % {
@@ -846,7 +858,7 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
             ))
             # Autoincrement SQL (for backends with post table definition variant)
             if field.get_internal_type() in ("AutoField", "BigAutoField"):
-                autoinc_sql = self.connection.ops.autoinc_sql(model._meta.db_table, field.column)
+                autoinc_sql = self.connection.ops.autoinc_sql(model._meta.db_table.split('/')[0], field.column)
                 if autoinc_sql:
                     self.deferred_sql.extend(autoinc_sql)
 
@@ -857,12 +869,14 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
             condition = ' AND '.join(["[%s] IS NOT NULL" % col for col in columns])
             self.deferred_sql.append(self._create_unique_sql(model, columns, condition=condition))
 
-        if hasattr(model, 'temporal') and model.temporal:
+        tt_def = tokenize_tt(model._meta.db_table)
+
+        if tt_def:
             column_sqls.append(self._sql_create_temporal_table_field)
 
         # Make the table
         sql = self.sql_create_table % {
-            "table": self.quote_name(model._meta.db_table),
+            "table": self.quote_name(model._meta.db_table.split('/')[0]),
             "definition": ", ".join(column_sqls)
         }
         if model._meta.db_tablespace:
@@ -870,11 +884,11 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
             if tablespace_sql:
                 sql += ' ' + tablespace_sql
 
-        if hasattr(model, 'temporal') and model.temporal:
+        if tt_def:
             sql += ' ' + self._sql_create_temporal_table_suffix % {
                 'hist_clause': (self._sql_create_temporal_table_hist_clause % {
-                    'hist_table': self.quote_name(model.hist_table)
-                } if not model.anonymous else '')
+                    'hist_table': self.quote_name(tt_def['hist_table'])
+                } if not tt_def['anonymous'] else '')
             }
 
         # Prevent using [] as params, in the case a literal '%' is used in the definition
@@ -896,7 +910,7 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
         # Delete the foreign key constraints
         result = self.execute(
             self._sql_select_foreign_key_constraints % {
-                "table": self.quote_value(model._meta.db_table),
+                "table": self.quote_value(model._meta.db_table.split('/')[0]),
             },
             has_result=True
         )
@@ -914,7 +928,7 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
         super().delete_model(model)
         # Remove all deferred statements referencing the deleted table.
         for sql in list(self.deferred_sql):
-            if isinstance(sql, Statement) and sql.references_table(model._meta.db_table):
+            if isinstance(sql, Statement) and sql.references_table(model._meta.db_table.split('/')[0]):
                 self.deferred_sql.remove(sql)
 
     def execute(self, sql, params=(), has_result=False):
@@ -986,7 +1000,7 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
             return
         # Drop any FK constraints, SQL Server requires explicit deletion
         with self.connection.cursor() as cursor:
-            constraints = self.connection.introspection.get_constraints(cursor, model._meta.db_table)
+            constraints = self.connection.introspection.get_constraints(cursor, model._meta.db_table.split('/')[0])
         for name, infodict in constraints.items():
             if field.column in infodict['columns'] and infodict['foreign_key']:
                 self.execute(self._delete_constraint_sql(self.sql_delete_fk, model, name))
@@ -994,21 +1008,21 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
         for name, infodict in constraints.items():
             if field.column in infodict['columns'] and infodict['index']:
                 self.execute(self.sql_delete_index % {
-                    "table": self.quote_name(model._meta.db_table),
+                    "table": self.quote_name(model._meta.db_table.split('/')[0]),
                     "name": self.quote_name(name),
                 })
         # Drop primary key constraint, SQL Server requires explicit deletion
         for name, infodict in constraints.items():
             if field.column in infodict['columns'] and infodict['primary_key']:
                 self.execute(self.sql_delete_pk % {
-                    "table": self.quote_name(model._meta.db_table),
+                    "table": self.quote_name(model._meta.db_table.split('/')[0]),
                     "name": self.quote_name(name),
                 })
         # Drop check constraints, SQL Server requires explicit deletion
         for name, infodict in constraints.items():
             if field.column in infodict['columns'] and infodict['check']:
                 self.execute(self.sql_delete_check % {
-                    "table": self.quote_name(model._meta.db_table),
+                    "table": self.quote_name(model._meta.db_table.split('/')[0]),
                     "name": self.quote_name(name),
                 })
         # Drop unique constraints, SQL Server requires explicit deletion
@@ -1016,12 +1030,12 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
             if (field.column in infodict['columns'] and infodict['unique'] and
                     not infodict['primary_key'] and not infodict['index']):
                 self.execute(self.sql_delete_unique % {
-                    "table": self.quote_name(model._meta.db_table),
+                    "table": self.quote_name(model._meta.db_table.split('/')[0]),
                     "name": self.quote_name(name),
                 })
         # Delete the column
         sql = self.sql_delete_column % {
-            "table": self.quote_name(model._meta.db_table),
+            "table": self.quote_name(model._meta.db_table.split('/')[0]),
             "column": self.quote_name(field.column),
         }
         self.execute(sql)
@@ -1030,5 +1044,5 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
             self.connection.close()
         # Remove all deferred statements referencing the deleted column.
         for sql in list(self.deferred_sql):
-            if isinstance(sql, Statement) and sql.references_column(model._meta.db_table, field.column):
+            if isinstance(sql, Statement) and sql.references_column(model._meta.db_table.split('/')[0], field.column):
                 self.deferred_sql.remove(sql)
