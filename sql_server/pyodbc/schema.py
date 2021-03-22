@@ -1040,7 +1040,7 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
                 self.deferred_sql.remove(sql)
 
 def tokenize_tt(vb_name):
-    if len(vbname.split('/')) > 1:
+    if len(vb_name.split('/')) > 1:
         tt_def = vb_name.split('/')[1]
 
         if tt_def.lower().startswith('tt{'):
