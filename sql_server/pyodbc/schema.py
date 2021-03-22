@@ -861,8 +861,10 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
             condition = ' AND '.join(["[%s] IS NOT NULL" % col for col in columns])
             self.deferred_sql.append(self._create_unique_sql(model, columns, condition=condition))
 
-        if hasattr(model, 'temporal') and model.temporal:
-            column_sqls.append(self._sql_create_temporal_table_field)
+        tt_def = tokenize_tt(model._meta.verbose_name)
+
+        if tt_def:
+            column_sqls.extend(self._sql_create_temporal_table_fields)
 
         # Make the table
         sql = self.sql_create_table % {
@@ -874,11 +876,11 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
             if tablespace_sql:
                 sql += ' ' + tablespace_sql
 
-        if hasattr(model, 'temporal') and model.temporal:
+        if tt_def:
             sql += ' ' + self._sql_create_temporal_table_suffix % {
                 'hist_clause': (self._sql_create_temporal_table_hist_clause % {
-                    'hist_table': self.quote_name(model.hist_table)
-                } if not model.anonymous else '')
+                    'hist_table': self.quote_name(tt_def['hist_table'])
+                } if not tt_def['anonymous'] else '')
             }
 
         # Prevent using [] as params, in the case a literal '%' is used in the definition
@@ -1036,3 +1038,15 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
         for sql in list(self.deferred_sql):
             if isinstance(sql, Statement) and sql.references_column(model._meta.db_table, field.column):
                 self.deferred_sql.remove(sql)
+
+def tokenize_tt(vb_name):
+    if len(vbname.split('/')) > 1:
+        tt_def = vb_name.split('/')[1]
+
+        if tt_def.lower().startswith('tt{'):
+            return {
+                'anonymous': bool(tt_def.split(',')[0][3:]),
+                'hist_table': tt_def.split(',')[1][:-1]
+            }
+
+    return None
