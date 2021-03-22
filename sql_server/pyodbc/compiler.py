@@ -218,7 +218,7 @@ class SQLCompiler(compiler.SQLCompiler):
                 if do_offset:
                     meta = self.query.get_meta()
                     qn = self.quote_name_unless_alias
-                    offsetting_order_by = '%s.%s' % (qn(meta.db_table.split('/')[0]), qn(meta.pk.db_column or meta.pk.column))
+                    offsetting_order_by = '%s.%s' % (qn(meta.db_table), qn(meta.pk.db_column or meta.pk.column))
                     if do_offset_emulation:
                         if order_by:
                             ordering = []
@@ -412,7 +412,7 @@ class SQLInsertCompiler(compiler.SQLInsertCompiler, SQLCompiler):
             columns = [f.column for f in fields]
             if auto_field_column in columns:
                 id_insert_sql = []
-                table = qn(opts.db_table.split('/')[0])
+                table = qn(opts.db_table)
                 sql_format = 'SET IDENTITY_INSERT %s ON; %s; SET IDENTITY_INSERT %s OFF'
                 for q, p in sql:
                     id_insert_sql.append((sql_format % (table, q, table), p))
@@ -425,7 +425,7 @@ class SQLInsertCompiler(compiler.SQLInsertCompiler, SQLCompiler):
         # going to be column names (so we can avoid the extra overhead).
         qn = self.connection.ops.quote_name
         opts = self.query.get_meta()
-        result = ['INSERT INTO %s' % qn(opts.db_table.split('/')[0])]
+        result = ['INSERT INTO %s' % qn(opts.db_table)]
         fields = self.query.fields or [opts.pk]
 
         if self.query.fields:
