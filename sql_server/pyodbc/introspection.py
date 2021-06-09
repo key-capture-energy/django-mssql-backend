@@ -47,12 +47,12 @@ class DatabaseIntrospection(BaseDatabaseIntrospection):
 
     ignored_tables = []
 
-    def get_object_id(self, cursor, object):
+    def get_object_id(self, cursor, object_):
         """
         Returns the object id for a given database object.
         """
 
-        sql = "SELECT OBJECT_ID(%s)"
+        sql = "SELECT OBJECT_ID({})".format(object_)
         cursor.execute(sql)
         results = cursor.fetchall()[0][0]
         return results[0][0] if len(results) > 0 else None
