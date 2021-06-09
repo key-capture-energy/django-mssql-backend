@@ -52,7 +52,7 @@ class DatabaseIntrospection(BaseDatabaseIntrospection):
         Returns the object id for a given database object.
         """
 
-        sql = "SELECT OBJECT_ID({})".format(object_)
+        sql = "SELECT OBJECT_ID('{}')".format(object_)
         cursor.execute(sql)
         results = cursor.fetchall()[0][0]
         return results[0][0] if len(results) > 0 else None
