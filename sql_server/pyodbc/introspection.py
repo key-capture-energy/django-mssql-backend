@@ -54,7 +54,7 @@ class DatabaseIntrospection(BaseDatabaseIntrospection):
 
         sql = "SELECT OBJECT_ID('{}')".format(object_)
         cursor.execute(sql)
-        results = cursor.fetchall()[0][0]
+        results = cursor.fetchall()
         return results[0][0] if len(results) > 0 else None
 
     def get_field_type(self, data_type, description):
