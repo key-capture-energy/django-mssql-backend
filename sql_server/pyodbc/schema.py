@@ -910,12 +910,14 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
 
         if tt_def:
             if tt_def['anonymous']:
-                history_table = '{}MSSQL_TemporalHistoryFor_{}'.format(
-                    (schema_name + '].[' if schema_name else ''),
-                    self.connection.introspection.get_object_id(
-                        self.quote_name(model._meta.db_table)
+                with self.connection.cursor() as cursor:
+                    history_table = '{}MSSQL_TemporalHistoryFor_{}'.format(
+                        (schema_name + '].[' if schema_name else ''),
+                        self.connection.introspection.get_object_id(
+                            cursor,
+                            self.quote_name(model._meta.db_table)
+                        )
                     )
-                )
             else:
                 history_table = tt_def['hist_table']
 
