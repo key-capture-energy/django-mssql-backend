@@ -113,11 +113,18 @@ class DatabaseIntrospection(BaseDatabaseIntrospection):
         return items
 
     def get_sequences(self, cursor, table_name, table_fields=()):
+
+        schema_name = None
+
+        if len(table_name.split('].[')) > 1:
+
+            schema_name, table_name = table_name.split('].[')
+
         cursor.execute("""
             SELECT c.name FROM sys.columns c
             INNER JOIN sys.tables t ON c.object_id = t.object_id
-            WHERE t.schema_id = SCHEMA_ID() AND t.name = %s AND c.is_identity = 1""",
-                       [table_name])
+            WHERE t.schema_id = SCHEMA_ID(%s) AND t.name = %s AND c.is_identity = 1""",
+                       [schema_name or '', table_name])
         # SQL Server allows only one identity column per table
         # https://docs.microsoft.com/en-us/sql/t-sql/statements/create-table-transact-sql-identity-property
         row = cursor.fetchone()
@@ -133,6 +140,12 @@ class DatabaseIntrospection(BaseDatabaseIntrospection):
         # REFERENTIAL_CONSTRAINTS: http://msdn2.microsoft.com/en-us/library/ms179987.aspx
         # TABLE_CONSTRAINTS:       http://msdn2.microsoft.com/en-us/library/ms181757.aspx
 
+        schema_name = None
+
+        if len(table_name.split('].[')) > 1:
+
+            schema_name, table_name = table_name.split('].[')
+
         sql = """
 SELECT e.COLUMN_NAME AS column_name,
   c.TABLE_NAME AS referenced_table_name,
@@ -146,8 +159,8 @@ INNER JOIN INFORMATION_SCHEMA.CONSTRAINT_COLUMN_USAGE AS d
   ON c.CONSTRAINT_NAME = d.CONSTRAINT_NAME AND c.CONSTRAINT_SCHEMA = d.CONSTRAINT_SCHEMA
 INNER JOIN INFORMATION_SCHEMA.CONSTRAINT_COLUMN_USAGE AS e
   ON a.CONSTRAINT_NAME = e.CONSTRAINT_NAME AND a.TABLE_SCHEMA = e.TABLE_SCHEMA
-WHERE a.TABLE_SCHEMA = SCHEMA_NAME() AND a.TABLE_NAME = %s AND a.CONSTRAINT_TYPE = 'FOREIGN KEY'"""
-        cursor.execute(sql, (table_name,))
+WHERE a.TABLE_SCHEMA = %s AND a.TABLE_NAME = %s AND a.CONSTRAINT_TYPE = 'FOREIGN KEY'"""
+        cursor.execute(sql, (schema_name or 'SCHEMA_NAME()', table_name,))
         return dict([[item[0], (item[2], item[1])] for item in cursor.fetchall()])
 
     def get_key_columns(self, cursor, table_name):
@@ -155,6 +168,13 @@ WHERE a.TABLE_SCHEMA = SCHEMA_NAME() AND a.TABLE_NAME = %s AND a.CONSTRAINT_TYPE
         Returns a list of (column_name, referenced_table_name, referenced_column_name) for all
         key columns in given table.
         """
+
+        schema_name = None
+
+        if len(table_name.split('].[')) > 1:
+
+            schema_name, table_name = table_name.split('].[')
+
         key_columns = []
         cursor.execute("""
             SELECT c.name AS column_name, rt.name AS referenced_table_name, rc.name AS referenced_column_name
@@ -163,7 +183,7 @@ WHERE a.TABLE_SCHEMA = SCHEMA_NAME() AND a.TABLE_NAME = %s AND a.CONSTRAINT_TYPE
             INNER JOIN sys.columns c ON c.object_id = t.object_id AND c.column_id = fk.parent_column_id
             INNER JOIN sys.tables rt ON rt.object_id = fk.referenced_object_id
             INNER JOIN sys.columns rc ON rc.object_id = rt.object_id AND rc.column_id = fk.referenced_column_id
-            WHERE t.schema_id = SCHEMA_ID() AND t.name = %s""", [table_name])
+            WHERE t.schema_id = SCHEMA_ID(%s) AND t.name = %s""", [schema_name or '', table_name])
         key_columns.extend([tuple(row) for row in cursor.fetchall()])
         return key_columns
 
@@ -188,7 +208,7 @@ WHERE a.TABLE_SCHEMA = SCHEMA_NAME() AND a.TABLE_NAME = %s AND a.CONSTRAINT_TYPE
 
         if len(table_name.split('].[')) > 1:
 
-            schema_name, table_name = *table_name.split('].[')
+            schema_name, table_name = table_name.split('].[')
 
         constraints = {}
         # Loop over the key table, collecting things as constraints
