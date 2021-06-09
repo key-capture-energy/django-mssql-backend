@@ -183,6 +183,13 @@ WHERE a.TABLE_SCHEMA = SCHEMA_NAME() AND a.TABLE_NAME = %s AND a.CONSTRAINT_TYPE
          * orders: The order (ASC/DESC) defined for the columns of indexes
          * type: The type of the index (btree, hash, etc.)
         """
+
+        schema_name = None
+
+        if len(table_name.split('].[')) > 1:
+
+            schema_name, table_name = *table_name.split('].[')
+
         constraints = {}
         # Loop over the key table, collecting things as constraints
         # This will get PKs, FKs, and uniques, but not CHECK
@@ -226,12 +233,12 @@ WHERE a.TABLE_SCHEMA = SCHEMA_NAME() AND a.TABLE_NAME = %s AND a.CONSTRAINT_TYPE
                 kc.table_name = fk.table_name AND
                 kc.column_name = fk.column_name
             WHERE
-                kc.table_schema = SCHEMA_NAME() AND
+                kc.table_schema = %s AND
                 kc.table_name = %s
             ORDER BY
                 kc.constraint_name ASC,
                 kc.ordinal_position ASC
-        """, [table_name])
+        """, [schema_name or 'SCHEMA_NAME()', table_name])
         for constraint, column, kind, ref_table, ref_column in cursor.fetchall():
             # If we're the first column, make the record
             if constraint not in constraints:
@@ -255,9 +262,9 @@ WHERE a.TABLE_SCHEMA = SCHEMA_NAME() AND a.TABLE_NAME = %s AND a.CONSTRAINT_TYPE
                 kc.constraint_name = c.constraint_name
             WHERE
                 c.constraint_type = 'CHECK' AND
-                kc.table_schema = SCHEMA_NAME() AND
+                kc.table_schema = %s AND
                 kc.table_name = %s
-        """, [table_name])
+        """, [schema_name or 'SCHEMA_NAME()', table_name])
         for constraint, column in cursor.fetchall():
             # If we're the first column, make the record
             if constraint not in constraints:
@@ -294,12 +301,12 @@ WHERE a.TABLE_SCHEMA = SCHEMA_NAME() AND a.TABLE_NAME = %s AND a.CONSTRAINT_TYPE
                 ic.object_id = c.object_id AND
                 ic.column_id = c.column_id
             WHERE
-                t.schema_id = SCHEMA_ID() AND
+                t.schema_id = SCHEMA_ID(%s) AND
                 t.name = %s
             ORDER BY
                 i.index_id ASC,
                 ic.index_column_id ASC
-        """, [table_name])
+        """, [schema_name or '', table_name])
         indexes = {}
         for index, unique, primary, type_, desc, order, column in cursor.fetchall():
             if index not in indexes:
