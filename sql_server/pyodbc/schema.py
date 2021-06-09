@@ -78,6 +78,8 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
     ]
     _sql_create_temporal_table_suffix = "WITH (SYSTEM_VERSIONING = ON %(hist_clause)s)"
     _sql_create_temporal_table_hist_clause = "(HISTORY_TABLE = %(hist_table)s)"
+    _sql_alter_table_disable_system_versioning = "ALTER TABLE %(table)s SET (SYSTEM_VERSIONING = OFF)"
+    _sql_alter_table_remove_versioning_columns = "ALTER TABLE %(table)s DROP PERIOD FOR SYSTEM_TIME"
 
     def _alter_column_default_sql(self, model, old_field, new_field, drop=False):
         """
@@ -899,6 +901,42 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
         """
         Deletes a model from the database.
         """
+
+        tt_def = tokenize_tt(model._meta.verbose_name)
+        schema_name = None
+
+        if len(model._meta.db_table.split('].[')) > 1:
+            schema_name, _ = model._meta.db_table.split('].[')
+
+        if tt_def:
+            if tt_def['anonymous']:
+                history_table = '{}MSSQL_TemporalHistoryFor_{}'.format(
+                    (schema_name + '].[' if schema_name else ''),
+                    self.connection.introspection.get_object_id(
+                        self.quote_name(model._meta.db_table)
+                    )
+                )
+            else:
+                history_table = tt_def['hist_table']
+
+            self.execute(
+                self._sql_alter_table_disable_system_versioning % {
+                    "table": self.quote_name(model._meta.db_table)
+                }
+            )
+
+            self.execute(
+                self._sql_alter_table_remove_versioning_columns % {
+                    "table": self.quote_name(model._meta.db_table)
+                }
+            )
+
+            self.execute(
+                self.sql_delete_table % {
+                    "table": self.quote_name(history_table),
+                }
+            )
+
         # Delete the foreign key constraints
         result = self.execute(
             self._sql_select_foreign_key_constraints % {
@@ -1038,6 +1076,7 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
         for sql in list(self.deferred_sql):
             if isinstance(sql, Statement) and sql.references_column(model._meta.db_table, field.column):
                 self.deferred_sql.remove(sql)
+
 
 def tokenize_tt(vb_name):
     if len(vb_name.split('/')) > 1:
